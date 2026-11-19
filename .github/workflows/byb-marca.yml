@@ -61,6 +61,10 @@ jobs:
           sed -i "s|^LegalCopyright = .*|LegalCopyright = \"Copyright © $(date +%Y) $EMPRESA\"|" Cargo.toml
           sed -i "s|^ProductName = .*|ProductName = \"$APP_NAME\"|" Cargo.toml
           sed -i "s|^FileDescription = .*|FileDescription = \"$DESCRIPCION\"|" Cargo.toml
+          P=libs/portable/Cargo.toml
+          sed -i "s|^LegalCopyright = .*|LegalCopyright = \"Copyright © $(date +%Y) $EMPRESA\"|" $P
+          sed -i "s|^ProductName = .*|ProductName = \"$APP_NAME\"|" $P
+          sed -i "s|^FileDescription = .*|FileDescription = \"$DESCRIPCION\"|" $P
           R=flutter/windows/runner/Runner.rc
           sed -i "s|VALUE \"CompanyName\", \".*\" \"\\\\0\"|VALUE \"CompanyName\", \"$EMPRESA\" \"\\\\0\"|" $R
           sed -i "s|VALUE \"FileDescription\", \".*\" \"\\\\0\"|VALUE \"FileDescription\", \"$DESCRIPCION\" \"\\\\0\"|" $R
@@ -72,7 +76,7 @@ jobs:
         run: |
           git config user.name "ByB Bot"
           git config user.email "byb-bot@users.noreply.github.com"
-          git add -A res flutter src Cargo.toml
+          git add -A res flutter src Cargo.toml libs/portable/Cargo.toml
           git add -f flutter/assets/logo.png flutter/assets/icon.png
           git commit -m "Marca B y B: nombre, logo y datos de la empresa" || echo "Sin cambios nuevos"
           git push
