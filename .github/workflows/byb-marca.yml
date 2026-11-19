@@ -1,0 +1,83 @@
+name: ByB - Aplicar marca y compilar
+
+# Pone el nombre, logo y datos de B y B Basculas y Balanzas del Valle
+# en el programa y luego lanza la compilacion (Flutter Nightly Build).
+# Antes de usarlo: subir el logo a la carpeta  byb/logo.png  del repositorio.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  APP_NAME: "ByB Remoto"
+  EMPRESA: "B y B Basculas y Balanzas del Valle"
+  DESCRIPCION: "ByB Remoto - Soporte remoto B y B Basculas y Balanzas del Valle - Tel 3103634506 - basculasbyb.org"
+
+jobs:
+  marca:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar que el logo exista
+        run: |
+          if [ ! -f byb/logo.png ]; then
+            echo "::error::Falta el archivo byb/logo.png. Subelo al repositorio y vuelve a intentar."
+            exit 1
+          fi
+
+      - name: Instalar ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
+      - name: Crear iconos y logos a partir de byb/logo.png
+        run: |
+          set -e
+          L=byb/logo.png
+          # Icono cuadrado: el logo centrado sobre fondo transparente
+          convert "$L" -background none -gravity center -resize 1024x1024 -extent 1024x1024 /tmp/cuadrado.png
+          cp /tmp/cuadrado.png res/icon.png
+          cp /tmp/cuadrado.png res/mac-icon.png
+          convert /tmp/cuadrado.png -resize 32x32   res/32x32.png
+          convert /tmp/cuadrado.png -resize 64x64   res/64x64.png
+          convert /tmp/cuadrado.png -resize 128x128 res/128x128.png
+          convert /tmp/cuadrado.png -resize 256x256 res/128x128@2x.png
+          convert /tmp/cuadrado.png -define icon:auto-resize=256,128,64,48,32,16 res/icon.ico
+          convert /tmp/cuadrado.png -define icon:auto-resize=32,16 res/tray-icon.ico
+          convert /tmp/cuadrado.png -define icon:auto-resize=256,128,64,48,32,16 flutter/windows/runner/resources/app_icon.ico
+          # Logo e icono dentro de la ventana del programa
+          convert /tmp/cuadrado.png -resize 256x256 flutter/assets/icon.png
+          convert "$L" -background none -resize 600x120 flutter/assets/logo.png
+
+      - name: Cambiar nombre y datos de la empresa
+        run: |
+          set -e
+          # Nombre del programa (se aplica al arrancar)
+          sed -i 's|^pub fn load_custom_client() {$|pub fn load_custom_client() {\n    *config::APP_NAME.write().unwrap() = "'"$APP_NAME"'".to_owned();|' src/common.rs
+          grep -q "\"$APP_NAME\".to_owned()" src/common.rs || { echo "::error::No se pudo cambiar el nombre en src/common.rs"; exit 1; }
+          # Datos del archivo .exe (Propiedades > Detalles en Windows)
+          sed -i "s|^LegalCopyright = .*|LegalCopyright = \"Copyright © $(date +%Y) $EMPRESA\"|" Cargo.toml
+          sed -i "s|^ProductName = .*|ProductName = \"$APP_NAME\"|" Cargo.toml
+          sed -i "s|^FileDescription = .*|FileDescription = \"$DESCRIPCION\"|" Cargo.toml
+          R=flutter/windows/runner/Runner.rc
+          sed -i "s|VALUE \"CompanyName\", \".*\" \"\\\\0\"|VALUE \"CompanyName\", \"$EMPRESA\" \"\\\\0\"|" $R
+          sed -i "s|VALUE \"FileDescription\", \".*\" \"\\\\0\"|VALUE \"FileDescription\", \"$DESCRIPCION\" \"\\\\0\"|" $R
+          sed -i "s|VALUE \"LegalCopyright\", \".*\" \"\\\\0\"|VALUE \"LegalCopyright\", \"Copyright © $(date +%Y) $EMPRESA\" \"\\\\0\"|" $R
+          sed -i "s|VALUE \"ProductName\", \".*\" \"\\\\0\"|VALUE \"ProductName\", \"$APP_NAME\" \"\\\\0\"|" $R
+          git diff --stat
+
+      - name: Guardar cambios
+        run: |
+          git config user.name "ByB Bot"
+          git config user.email "byb-bot@users.noreply.github.com"
+          git add -A res flutter src Cargo.toml
+          git add -f flutter/assets/logo.png flutter/assets/icon.png
+          git commit -m "Marca B y B: nombre, logo y datos de la empresa" || echo "Sin cambios nuevos"
+          git push
+
+      - name: Lanzar la compilacion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run flutter-nightly.yml --ref "${GITHUB_REF_NAME}"
